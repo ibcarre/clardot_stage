@@ -1,4 +1,5 @@
-import { formatDateTime } from "./api";
+// lib/publications.ts
+import { formatDateTime, DATASET, extractRows, getJson, toRow, type Json, type PublicationInsert } from "./api";
 import { supabaseAnon } from "./supabase";
 
 export type PublicationRow = {
@@ -86,4 +87,44 @@ export function detailsOf(r: PublicationRow): [string, string][] {
     ["Fichier", r.filename],
   ];
   return candidates.filter((c): c is [string, string] => Boolean(c[1]));
+}
+
+/**
+ * Récupère les publications récentes depuis l'API de l'AMF / data.gouv.fr
+ */
+export async function fetchAmfPublications(limit = 100): Promise<PublicationInsert[]> {
+  try {
+    const qs = new URLSearchParams({
+      limit: String(limit),
+      order_by: "uin_dat_amf desc",
+    });
+
+    const json = await getJson(`/catalog/datasets/${encodeURIComponent(DATASET)}/records?${qs}`);
+    const rawRows = extractRows(json);
+
+    const publications: PublicationInsert[] = [];
+
+    for (const fields of rawRows) {
+      const row = toRow(fields);
+      if (row) {
+        const company =
+          (fields as any).company ||
+          (fields as any).company_name ||
+          (fields as any).nom_societe ||
+          (fields as any).societe ||
+          (fields as any).nom_emetteur ||
+          "Société non précisée";
+
+        publications.push({
+          ...row,
+          company,
+        } as PublicationInsert);
+      }
+    }
+
+    return publications;
+  } catch (error) {
+    console.error("Erreur lors de la récupération des publications AMF :", error);
+    return [];
+  }
 }

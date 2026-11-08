@@ -19,7 +19,7 @@ export async function GET() {
 
     let insertedCount = 0;
 
-    for (const item of rawPublications) {
+    for (const item of rawPublications as any[]) {
       // Récupération et normalisation robuste du champ company
       const company =
         item.company ||

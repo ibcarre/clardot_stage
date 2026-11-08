@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-brand: var(--brand);
+  --radius-md: calc(var(--radius) - 2px);
+}
+
+:root {
+  --background: oklch(0.995 0.003 95);
+  --foreground: oklch(0.2 0.01 260);
+  --muted: oklch(0.965 0.006 260);
+  --muted-foreground: oklch(0.5 0.015 260);
+  --border: oklch(0.91 0.008 260);
+  --ring: oklch(0.55 0.12 262);
+  --destructive: oklch(0.577 0.245 27.325);
+  --brand: oklch(0.43 0.14 262);
+  --radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.165 0.01 260);
+    --foreground: oklch(0.96 0.005 260);
+    --muted: oklch(0.225 0.012 260);
+    --muted-foreground: oklch(0.72 0.015 260);
+    --border: oklch(0.3 0.015 260);
+    --ring: oklch(0.7 0.12 262);
+    --destructive: oklch(0.704 0.191 22.216);
+    --brand: oklch(0.76 0.12 262);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  /* Tailwind v4 remet le curseur par défaut sur les boutons : on rétablit le pointeur. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  select,
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
+}

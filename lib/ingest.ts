@@ -81,7 +81,6 @@ export async function ingest({
 
   const rows = [...bySource.values()];
 
-  // Fix type error via un cast explicite pour le scoring
   const scoredRows = selectTopPublications(rows as any, 4);
 
   for (let i = 0; i < scoredRows.length; i += 500) {
@@ -124,7 +123,12 @@ export async function ingestIfStale(
   if (error || !claimed?.length) return { skipped: true as const };
 
   try {
-    return { skipped: false as const, ...(await ingest()) };
+    const result = await ingest();
+    // On étale d'abord le résultat de ingest(), puis on surcharge / force proprement skipped à false
+    return {
+      ...result,
+      skipped: false as const,
+    };
   } catch (e) {
     if (prev) await db.from("ingest_state").update({ last_run_at: prev }).eq("id", 1);
     throw e;

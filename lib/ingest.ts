@@ -1,10 +1,11 @@
+// lib/ingest.ts
 import { DATASET, extractRows, getJson, toRow, type Json, type PublicationInsert } from "./api";
 import { supabaseAdmin } from "./supabase";
-import { selectTopPublications } from "./scoring"; // Import du module de scoring
+import { selectTopPublications } from "./scoring";
 
-const PAGE = 100; // maximum accepté par l'endpoint /records
-const PARALLEL = 5; // pages demandées en même temps
-const DEFAULT_DAYS = 3; // fenêtre utilisée quand la base est vide
+const PAGE = 100;
+const PARALLEL = 5;
+const DEFAULT_DAYS = 3;
 
 async function fetchPage(since: string, offset: number): Promise<Json> {
   const qs = new URLSearchParams({
@@ -16,12 +17,6 @@ async function fetchPage(since: string, offset: number): Promise<Json> {
   return getJson(`/catalog/datasets/${encodeURIComponent(DATASET)}/records?${qs}`);
 }
 
-/**
- * Récupère les publications récentes, applique le scoring/sélection, et les insère (upsert) dans Supabase.
- * - `days` fourni : on remonte de `days` jours (utilisé par la route /api/ingest).
- * - sinon : on repart de la dernière publication connue (moins un jour de marge),
- *   ce qui rend l'appel léger quand on le fait à chaque rechargement de page.
- */
 export async function ingest({
   days,
   maxRows = 3000,
@@ -45,12 +40,10 @@ export async function ingest({
   }
   const since = sinceDate.toISOString().slice(0, 10);
 
-  // Première page : elle donne aussi le nombre total à récupérer.
   const first = await fetchPage(since, 0);
   const batches: Json[][] = [extractRows(first)];
   const total = Math.min(Number(first.total_count) || batches[0].length, maxRows);
 
-  // Pages suivantes, par groupes parallèles.
   const offsets: number[] = [];
   for (let o = PAGE; o < total; o += PAGE) offsets.push(o);
   for (let i = 0; i < offsets.length; i += PARALLEL) {
@@ -67,21 +60,33 @@ export async function ingest({
     fetched += batch.length;
     for (const fields of batch) {
       const row = toRow(fields);
-      if (row) bySource.set(row.source_id, row);
-      else skipped++;
+      if (row) {
+        const company =
+          (row as any).company ||
+          (fields as any).company_name ||
+          (fields as any).nom_societe ||
+          (fields as any).societe ||
+          (fields as any).nom_emetteur ||
+          "Société non précisée";
+
+        bySource.set(row.source_id, {
+          ...row,
+          company,
+        });
+      } else {
+        skipped++;
+      }
     }
   }
 
   const rows = [...bySource.values()];
 
-  // Application du scoring et de la sélection automatique des brèves
-  // (Assure-toi que les colonnes score et selected_for_brief existent dans ta table Supabase si tu les stockes)
-  const scoredRows = selectTopPublications(rows, 4);
+  // Fix type error via un cast explicite pour le scoring
+  const scoredRows = selectTopPublications(rows as any, 4);
 
   for (let i = 0; i < scoredRows.length; i += 500) {
     const { error } = await db
       .from("publications")
-      // On met ignoreDuplicates à false pour mettre à jour les scores et statuts si nécessaire
       .upsert(scoredRows.slice(i, i + 500), { onConflict: "source_id", ignoreDuplicates: false });
     if (error) throw new Error(`Supabase : ${error.message}`);
   }
@@ -91,15 +96,10 @@ export async function ingest({
     fetched,
     upserted: scoredRows.length,
     skipped,
-    selectedCount: scoredRows.filter((p: any) => p.selected_for_brief).length
+    selectedCount: scoredRows.filter((p: any) => p.selected_for_brief).length,
   };
 }
 
-/**
- * Lance `ingest()` au plus une fois toutes les `minIntervalSec` secondes, tous visiteurs
- * confondus (l'horodatage est stocké en base). La « réservation » est atomique : si deux
- * visiteurs arrivent en même temps, un seul déclenche l'ingestion.
- */
 export async function ingestIfStale(
   minIntervalSec = Number(process.env.INGEST_MIN_INTERVAL_SECONDS ?? 300)
 ) {
@@ -126,7 +126,6 @@ export async function ingestIfStale(
   try {
     return { skipped: false as const, ...(await ingest()) };
   } catch (e) {
-    // Échec : on rend la main pour que le prochain visiteur réessaie.
     if (prev) await db.from("ingest_state").update({ last_run_at: prev }).eq("id", 1);
     throw e;
   }

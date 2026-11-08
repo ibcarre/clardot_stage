@@ -1,5 +1,5 @@
 // lib/publications.ts
-import { formatDateTime, DATASET, extractRows, getJson, toRow, type Json, type PublicationInsert } from "./api";
+import { DATASET, extractRows, getJson, toRow, formatDateTime, type PublicationInsert } from "./api";
 import { supabaseAnon } from "./supabase";
 
 export type PublicationRow = {
@@ -89,9 +89,6 @@ export function detailsOf(r: PublicationRow): [string, string][] {
   return candidates.filter((c): c is [string, string] => Boolean(c[1]));
 }
 
-/**
- * Récupère les publications récentes depuis l'API de l'AMF / data.gouv.fr
- */
 export async function fetchAmfPublications(limit = 100): Promise<PublicationInsert[]> {
   try {
     const qs = new URLSearchParams({

@@ -9,7 +9,6 @@ export async function GET() {
   try {
     const db = supabaseAdmin();
 
-    // Récupération des publications classées par date d'envoi AMF (sent_amf_at) ou ID
     const { data: rawRows, error } = await db
       .from("publications")
       .select("*")
@@ -21,13 +20,18 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Normalisation des objets pour s'assurer que les propriétés requises par l'interface sont définies
     const normalizedRows = (rawRows || []).map((row: any) => ({
       ...row,
-      publication_date: row.publication_date || row.sent_amf_at || "Date inconnue",
+      company:
+        row.company ||
+        row.company_name ||
+        row.nom_societe ||
+        row.societe ||
+        row.nom_emetteur ||
+        "Société non précisée",
+      publication_date: row.sent_amf_at || row.uin_dat_amf || "Date non disponible",
     }));
 
-    // Application du scoring et sélection des tops brèves en mémoire
     const publications = selectTopPublications(normalizedRows, 4);
 
     return NextResponse.json({
